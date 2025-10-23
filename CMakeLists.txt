@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(glm REQUIRED)
 find_package(glfw3 REQUIRED)
 
 # add GLAD as a static library
@@ -22,6 +23,7 @@ add_executable(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
+    glm::glm
     glfw
     glad
 )
