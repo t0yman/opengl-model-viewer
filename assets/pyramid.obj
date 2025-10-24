@@ -1,0 +1,34 @@
+# Simple pyramid model for testing
+# 5 vertices: 4 base vertices + 1 apex
+# 6 triangular faces: 4 sides + 2 for the base
+
+# Vertex positions
+v  0.0  1.0  0.0   # apex
+v -1.0 -1.0  1.0   # base front-left
+v  1.0 -1.0  1.0   # base front-right  
+v  1.0 -1.0 -1.0   # base back-right
+v -1.0 -1.0 -1.0   # base back-left
+
+# Vertex normals (approximate normals for each face)
+vn  0.0  0.447  0.894   # front face normal
+vn  0.894  0.447  0.0   # right face normal
+vn  0.0  0.447 -0.894   # back face normal
+vn -0.894  0.447  0.0   # left face normal
+vn  0.0 -1.0  0.0       # base normal (pointing down)
+
+# Faces (each triangle references position//normal)
+# Front face
+f 1//1 2//1 3//1
+
+# Right face  
+f 1//2 3//2 4//2
+
+# Back face
+f 1//3 4//3 5//3
+
+# Left face
+f 1//4 5//4 2//4
+
+# Base (two triangles to form a square)
+f 2//5 5//5 4//5
+f 2//5 4//5 3//5
