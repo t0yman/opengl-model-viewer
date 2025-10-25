@@ -3,11 +3,11 @@
 
 A real-time 3D model viewer built with modern OpenGL to demonstrate graphics programming fundamentals.
 
-![Cube Demo](docs/cube_demo.mp4)
+![Cube Demo](docs/cube_demo.gif)
 
-![Pyramid Demo](docs/pyramid_demo.mp4)
+![Pyramid Demo](docs/pyramid_demo.gif)
 
-![Tetrahedron Demo](docs/tetrahedron_demo.mp4)
+![Tetrahedron Demo](docs/tetrahedron_demo.gif)
 
 ## Features
 
