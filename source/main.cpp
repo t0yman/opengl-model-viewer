@@ -96,7 +96,8 @@ int main()
         layout (location = 0) in vec3 aPos;
         layout (location = 1) in vec3 aNormal;
 
-        out vec3 vertexNormal;
+        out vec3 worldVertexPos;
+        out vec3 worldVertexNormal;
 
         uniform mat4 modelMatrix;
         uniform mat4 viewMatrix;
@@ -104,22 +105,48 @@ int main()
 
         void main()
         {
+            vec4 worldPos = modelMatrix * vec4(aPos, 1.0);
+            vec3 worldNormal = transpose(inverse(mat3(modelMatrix))) * aNormal;
+
             gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(aPos, 1.0);
 
-            vertexNormal = aNormal * 0.5 + 0.5;
+            worldVertexPos = worldPos.xyz;
+            worldVertexNormal = worldNormal;
         }
     )";
 
     const char* fragmentShaderSource = R"(
         #version 330 core
 
-        in vec3 vertexNormal;
+        in vec3 worldVertexPos;
+        in vec3 worldVertexNormal;
 
         out vec4 FragColor;
 
+        uniform vec3 lightPos;
+        uniform vec3 lightColor;
+        uniform vec3 cameraPos;
+        uniform vec3 ambientColor;
+        uniform vec3 diffuseColor;
+        uniform vec3 specularColor;
+        uniform float shininessValue;
+
         void main()
         {
-            FragColor = vec4(vertexNormal, 1.0);
+            vec3 normal = normalize(worldVertexNormal);
+
+            vec3 ambient = lightColor * 0.1 * ambientColor;
+            
+            vec3 lightDir = normalize(lightPos - worldVertexPos);
+            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 diffuse = lightColor * diff * diffuseColor;
+
+            vec3 viewDir = normalize(cameraPos - worldVertexPos);
+            vec3 reflectDir = reflect(-lightDir, normal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininessValue);
+            vec3 specular = lightColor * spec * specularColor;
+
+            FragColor = vec4(ambient + diffuse + specular, 1);
         }
     )";
 
@@ -178,6 +205,21 @@ int main()
     const int viewMatrixLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
     const int projectionMatrixLocation = glGetUniformLocation(shaderProgram, "projectionMatrix");
 
+    const glm::vec3 lightPos{2.0f, 3.0f, 2.0f};
+    const glm::vec3 lightColor{1.0f, 1.0f, 1.0f};
+    const glm::vec3 ambientColor{0.2f, 0.2f, 0.2f};
+    const glm::vec3 diffuseColor{0.8f, 0.5f, 0.3f};
+    const glm::vec3 specularColor{1.0f, 1.0f, 1.0f};
+    const float shininessValue = 32.0f;
+
+    const int lightPosLocation = glGetUniformLocation(shaderProgram, "lightPos");
+    const int lightColorLocation = glGetUniformLocation(shaderProgram, "lightColor");
+    const int cameraPosLocation = glGetUniformLocation(shaderProgram, "cameraPos");
+    const int ambientColorLocation = glGetUniformLocation(shaderProgram, "ambientColor");
+    const int diffuseColorLocation = glGetUniformLocation(shaderProgram, "diffuseColor");
+    const int specularColorLocation = glGetUniformLocation(shaderProgram, "specularColor");
+    const int shininessValueLocation = glGetUniformLocation(shaderProgram, "shininessValue");
+
     glEnable(GL_DEPTH_TEST);
 
     float lastFrameTime = 0.0f;
@@ -205,6 +247,14 @@ int main()
         glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
         glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
         glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+
+        glUniform3fv(lightPosLocation, 1, glm::value_ptr(lightPos));
+        glUniform3fv(lightColorLocation, 1, glm::value_ptr(lightColor));
+        glUniform3fv(cameraPosLocation, 1, glm::value_ptr(cameraPos));
+        glUniform3fv(ambientColorLocation, 1, glm::value_ptr(ambientColor));
+        glUniform3fv(diffuseColorLocation, 1, glm::value_ptr(diffuseColor));
+        glUniform3fv(specularColorLocation, 1, glm::value_ptr(specularColor));
+        glUniform1f(shininessValueLocation, shininessValue);
 
         glBindVertexArray(vao);
         glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertices.size()));
