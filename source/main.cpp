@@ -1,7 +1,11 @@
 #include <cmath>
 
+#include <array>
+#include <vector>
 #include <algorithm>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 
 #include <glad/glad.h>
@@ -12,10 +16,17 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+struct Vertex
+{
+    glm::vec3 position;
+    glm::vec3 normal;
+};
+
 void FramebufferSizeCallback(GLFWwindow* windowHandle, int width, int height);
 void ProcessInput(GLFWwindow* windowHandle, float& distanceFromTarget, float& azimuth, float& elevation, float deltaTime);
 
 glm::vec3 CalculateCameraPosition(float distanceFromTarget, float azimuth, float elevation, const glm::vec3& target);
+std::vector<Vertex> LoadObjFile(const std::string& filepath);
 
 int main()
 {
@@ -58,13 +69,8 @@ int main()
 
     glViewport(0, 0, windowWidth, windowHeight);
 
-    // layout: position.x, position.y, position.z, color.r, color.g, color.b 
-    float vertices[] = {
-        -0.5f, -0.5f, 0.7f, 1.0f, 0.0f, 0.0f,
-        0.5f, -0.5f, -0.3f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f
-    };
-
+    std::vector<Vertex> vertices = LoadObjFile("../assets/pyramid.obj");
+ 
     unsigned int vao;
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -72,14 +78,14 @@ int main()
     unsigned int vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
 
     // enable position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // enable color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    // enable normal attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
     glEnableVertexAttribArray(1);
 
     glBindVertexArray(0);
@@ -88,9 +94,9 @@ int main()
         #version 330 core
 
         layout (location = 0) in vec3 aPos;
-        layout (location = 1) in vec3 aColor;
+        layout (location = 1) in vec3 aNormal;
 
-        out vec3 vertexColor;
+        out vec3 vertexNormal;
 
         uniform mat4 modelMatrix;
         uniform mat4 viewMatrix;
@@ -100,20 +106,20 @@ int main()
         {
             gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(aPos, 1.0);
 
-            vertexColor = aColor;
+            vertexNormal = aNormal * 0.5 + 0.5;
         }
     )";
 
     const char* fragmentShaderSource = R"(
         #version 330 core
 
-        in vec3 vertexColor;
+        in vec3 vertexNormal;
 
         out vec4 FragColor;
 
         void main()
         {
-            FragColor = vec4(vertexColor, 1.0);
+            FragColor = vec4(vertexNormal, 1.0);
         }
     )";
 
@@ -157,7 +163,7 @@ int main()
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    float cameraDistanceFromTarget = 0.5f;
+    float cameraDistanceFromTarget = 5.0f;
     float cameraAzimuth = 0.0f;
     float cameraElevation = 0.0f;
     glm::vec3 cameraTarget{0.0f, 0.0f, 0.0f};
@@ -201,7 +207,7 @@ int main()
         glUniformMatrix4fv(projectionMatrixLocation, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 
         glBindVertexArray(vao);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertices.size()));
         glBindVertexArray(0);
 
         glfwSwapBuffers(windowHandle);
@@ -254,7 +260,7 @@ void ProcessInput(GLFWwindow* windowHandle, float& distanceFromTarget, float& az
     }
     if (glfwGetKey(windowHandle, GLFW_KEY_S) == GLFW_PRESS)
     {
-        distanceFromTarget += cameraZoomSpeed * deltaTime;  // move father
+        distanceFromTarget += cameraZoomSpeed * deltaTime;  // move farther
         if (distanceFromTarget > 20.0f)
         {
             distanceFromTarget = 20.f;
@@ -289,4 +295,76 @@ glm::vec3 CalculateCameraPosition(float distanceFromTarget, float azimuth, float
 
     // add the offset to the target position to get the final camera position
     return target + glm::vec3{x, y, z};
+}
+
+std::vector<Vertex> LoadObjFile(const std::string& filepath)
+{
+    std::ifstream file{filepath};
+    if (file.is_open() == false)
+    {
+        throw std::runtime_error{"Failed to open OBJ file"};
+    }
+
+    std::vector<glm::vec3> positions;
+    std::vector<glm::vec3> normals;
+
+    std::vector<Vertex> vertices;
+
+    std::string line;
+    while (std::getline(file, line))
+    {
+        if (line.empty() || line[0] == '#')
+        {
+            continue;
+        }
+
+        std::istringstream lineStream{line};
+        
+        std::string prefix;
+        lineStream >> prefix;
+        if (prefix == "v")
+        {
+            glm::vec3 position;
+
+            lineStream >> position.x;
+            lineStream >> position.y;
+            lineStream >> position.z;
+
+            positions.push_back(position);
+        }
+        else if (prefix == "vn")
+        {
+            glm::vec3 normal;
+
+            lineStream >> normal.x;
+            lineStream >> normal.y;
+            lineStream >> normal.z;
+
+            normals.push_back(normal);
+        }
+        else if (prefix == "f")
+        {
+            std::string vertex0;
+            std::string vertex1;
+            std::string vertex2;
+
+            lineStream >> vertex0;
+            lineStream >> vertex1;
+            lineStream >> vertex2;
+
+            for (const auto& vertex : std::array<std::string, 3>{vertex0, vertex1, vertex2})
+            {
+                const std::size_t separatorIndex = vertex.find("//");
+
+                const int positionIndex = std::stoi(vertex.substr(0, separatorIndex)) - 1;
+                const int normalIndex = std::stoi(vertex.substr(separatorIndex + 2)) - 1;
+
+                vertices.push_back(Vertex{positions[positionIndex], normals[normalIndex]});
+            }
+        }
+    }
+
+    file.close();
+
+    return vertices;
 }
