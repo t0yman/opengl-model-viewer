@@ -13,7 +13,7 @@ A real-time 3D model viewer built with modern OpenGL to demonstrate graphics pro
 
 - 3D Model Loading: OBJ file parser supporting vertex positions and normals
 - Phong Lighting: Full Phong reflection model with ambient, diffuse, and specular components
-- Interactive Camera: Obital camera system with smooth sphereical coordinate controls
+- Interactive Camera: Orbital camera system with smooth spherical coordinate controls
 - Modern OpenGL: Uses OpenGL 3.3 Core Profile with vertex and fragment shaders
 - Cross-Platform: Builds on Windows, macOS, and Linux via CMake
 
