@@ -69,7 +69,7 @@ int main()
 
     glViewport(0, 0, windowWidth, windowHeight);
 
-    std::vector<Vertex> vertices = LoadObjFile("../assets/pyramid.obj");
+    std::vector<Vertex> vertices = LoadObjFile("../assets/tetrahedron.obj");
  
     unsigned int vao;
     glGenVertexArrays(1, &vao);
@@ -90,6 +90,7 @@ int main()
 
     glBindVertexArray(0);
 
+    // transforms vertices to clip space and passes data to fragment shader
     const char* vertexShaderSource = R"(
         #version 330 core
 
@@ -115,6 +116,7 @@ int main()
         }
     )";
 
+    // implements phong lighting model
     const char* fragmentShaderSource = R"(
         #version 330 core
 
@@ -347,6 +349,9 @@ glm::vec3 CalculateCameraPosition(float distanceFromTarget, float azimuth, float
     return target + glm::vec3{x, y, z};
 }
 
+
+ // Loads a 3D model from an OBJ file
+ // Handles OBJ files with vertex positions (v) and normals (vn).
 std::vector<Vertex> LoadObjFile(const std::string& filepath)
 {
     std::ifstream file{filepath};
