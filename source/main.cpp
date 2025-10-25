@@ -1,3 +1,6 @@
+#include <cmath>
+
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
@@ -10,7 +13,9 @@
 #include <glm/gtc/type_ptr.hpp>
 
 void FramebufferSizeCallback(GLFWwindow* windowHandle, int width, int height);
-void ProcessInput(GLFWwindow* windowHandle);
+void ProcessInput(GLFWwindow* windowHandle, float& distanceFromTarget, float& azimuth, float& elevation, float deltaTime);
+
+glm::vec3 CalculateCameraPosition(float distanceFromTarget, float azimuth, float elevation, const glm::vec3& target);
 
 int main()
 {
@@ -119,7 +124,7 @@ int main()
     glShaderSource(vertexShader, 1, &vertexShaderSource, nullptr);
     glCompileShader(vertexShader);
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (success != true)
+    if (!success)
     {
         glGetShaderInfoLog(vertexShader, 512, nullptr, log);
         std::cerr << log << std::endl;
@@ -130,7 +135,7 @@ int main()
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, nullptr);
     glCompileShader(fragmentShader);
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (success != true)
+    if (!success)
     {
         glGetShaderInfoLog(fragmentShader, 512, nullptr, log);
         std::cerr << log << std::endl;
@@ -142,7 +147,7 @@ int main()
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (success != true)
+    if (!success)
     {
         glGetProgramInfoLog(shaderProgram, 512, nullptr, log);
         std::cerr << log << std::endl;
@@ -152,9 +157,11 @@ int main()
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    const glm::vec3 cameraPos = glm::vec3{0.0f, 0.0f, 3.0f};
-    const glm::vec3 cameraTarget = glm::vec3{0.0f, 0.0f, 0.0f};
-    const glm::vec3 cameraUp = glm::vec3{0.0f, 1.0f, 0.0f};
+    float cameraDistanceFromTarget = 0.5f;
+    float cameraAzimuth = 0.0f;
+    float cameraElevation = 0.0f;
+    glm::vec3 cameraTarget{0.0f, 0.0f, 0.0f};
+    const glm::vec3 cameraUp{0.0f, 1.0f, 0.0f};
 
     float aspectRatio = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
     const float fov = glm::radians(45.0f);
@@ -167,9 +174,15 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
 
+    float lastFrameTime = 0.0f;
+
     while (glfwWindowShouldClose(windowHandle) == false)
     {
-        ProcessInput(windowHandle);
+        float currentFrameTime = static_cast<float>(glfwGetTime());
+        float deltaTime = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+
+        ProcessInput(windowHandle, cameraDistanceFromTarget, cameraAzimuth, cameraElevation, deltaTime);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -177,7 +190,10 @@ int main()
         glUseProgram(shaderProgram);
 
         glm::mat4 modelMatrix = glm::mat4{1.0f};
+
+        glm::vec3 cameraPos = CalculateCameraPosition(cameraDistanceFromTarget, cameraAzimuth, cameraElevation, cameraTarget);
         glm::mat4 viewMatrix = glm::lookAt(cameraPos, cameraTarget, cameraUp);
+        
         glm::mat4 projectionMatrix = glm::perspective(fov, aspectRatio, distanceToNearPlane, distanceToFarPlane);
 
         glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
@@ -202,15 +218,75 @@ int main()
     return 0;
 }
 
-void FramebufferSizeCallback(GLFWwindow* windowHandle, int width, int height)
+void FramebufferSizeCallback(GLFWwindow*, int width, int height)
 {
     glViewport(0, 0, width, height);
 }
 
-void ProcessInput(GLFWwindow* windowHandle)
+void ProcessInput(GLFWwindow* windowHandle, float& distanceFromTarget, float& azimuth, float& elevation, float deltaTime)
 {
     if (glfwGetKey(windowHandle, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     {
         glfwSetWindowShouldClose(windowHandle, true);
     }
+
+    const float cameraRotationSpeed = 2.0f;
+    const float cameraZoomSpeed = 5.0f;
+
+    // horizontal rotation (left/right around target)
+    if (glfwGetKey(windowHandle, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        azimuth -= cameraRotationSpeed * deltaTime;  // rotate counterclockwise
+    }
+    if (glfwGetKey(windowHandle, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        azimuth += cameraRotationSpeed * deltaTime;  // rotate clockwise
+    }
+
+    // zoom in/out (change distance from target)
+    if (glfwGetKey(windowHandle, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        distanceFromTarget -= cameraZoomSpeed * deltaTime;  // move closer
+        if (distanceFromTarget < 0.5f)
+        {
+            distanceFromTarget = 0.5f;
+        }
+    }
+    if (glfwGetKey(windowHandle, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        distanceFromTarget += cameraZoomSpeed * deltaTime;  // move father
+        if (distanceFromTarget > 20.0f)
+        {
+            distanceFromTarget = 20.f;
+        }
+    }
+
+    // vertical rotation (up/down view angle)
+    if (glfwGetKey(windowHandle, GLFW_KEY_Q) == GLFW_PRESS)
+    {
+        elevation += cameraRotationSpeed * deltaTime;  // move up higher
+        if (elevation > glm::radians(89.0f))
+        {
+            elevation = glm::radians(89.0f);
+        }
+    }
+    if (glfwGetKey(windowHandle, GLFW_KEY_E) == GLFW_PRESS)
+    {
+        elevation -= cameraRotationSpeed * deltaTime;  // move down lower
+        if (elevation < glm::radians(-89.0f))
+        {
+            elevation = glm::radians(-89.0f);
+        }
+    }
+}
+
+glm::vec3 CalculateCameraPosition(float distanceFromTarget, float azimuth, float elevation, const glm::vec3& target)
+{
+    // convert spherical coordinates to cartesian offset from target
+    const float x = distanceFromTarget * std::cos(elevation) * std::sin(azimuth);
+    const float y = distanceFromTarget * std::sin(elevation);
+    const float z = distanceFromTarget * std::cos(elevation) * std::cos(azimuth);
+
+    // add the offset to the target position to get the final camera position
+    return target + glm::vec3{x, y, z};
 }
